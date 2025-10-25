@@ -1,15 +1,18 @@
 {
-  "name": "farm-certification-frontend",
+  "name": "agro-tour-cert-frontend",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@types/node": "^16.18.68",
+    "@types/node": "^22.12.0",
     "@types/react": "^18.2.42",
     "@types/react-dom": "^18.2.17",
+    "axios": "^1.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-hook-form": "^7.48.0",
     "react-router-dom": "^6.8.0",
-    "typescript": "^4.9.5",
+    "react-toastify": "^9.1.0",
+    "typescript": "^5.0.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
