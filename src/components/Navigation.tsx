@@ -73,15 +73,13 @@ export function Navigation({ currentPage, onNavigate, userRole }: NavigationProp
                 </span>
               </div>
             </div>
-            {userRole === "admin" && (
-              <button 
-                onClick={() => onNavigate("login")}
-                className="p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-                title="登出"
-              >
-                <LogOut className="w-5 h-5" />
-              </button>
-            )}
+            <button 
+              onClick={() => onNavigate("login")}
+              className="p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+              title="登出"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </div>
