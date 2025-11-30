@@ -5,9 +5,11 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { FormData, AssessmentAnswer } from "../ApplicationWizard";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
-import { Upload, FileText, X } from "lucide-react";
+import { Upload, FileText, X, Loader2 } from "lucide-react";
 import { Slider } from "../ui/slider";
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import { toast } from "sonner";
 
 interface FormStep3Props {
   formData: FormData;
@@ -17,123 +19,27 @@ interface FormStep3Props {
   saveDraft: () => void;
 }
 
-// 基礎題庫 (四個構面)
-const baseAssessmentSections = [
-  {
-    title: "整體環境與經營",
-    items: [
-      {
-        id: "q01",
-        question: "01. 場域環境具鄉村感",
-        hint: "評分參考：0分=缺乏鄉村感、2.5分=具鄉村感、5分=濃厚鄉村感"
-      },
-      {
-        id: "q02",
-        question: "02. 特色農遊的經營理念",
-        hint: "評分參考：0分=無、2.5分=有理念、5分=具創意與完整性"
-      },
-      {
-        id: "q03",
-        question: "03. 場域整體環境整潔度",
-        hint: "評分參考：0分=不整潔、2.5分=普通、5分=非常整潔"
-      }
-    ]
-  },
-  {
-    title: "特色資源與設施",
-    items: [
-      {
-        id: "q04",
-        question: "04. 是否有特色農業專區供遊客參觀",
-        hint: "評分參考：0分=無、2.5分=有但一般、5分=有且規劃良好"
-      },
-      {
-        id: "q05",
-        question: "05. 是否具鄉村感建築",
-        hint: "評分參考：0分=無、2.5分=部分具特色、5分=具濃厚鄉村感"
-      },
-      {
-        id: "q06",
-        question: "06. 場域內休憩設施完善度",
-        hint: "評分參考：0分=不完善、2.5分=普通、5分=非常完善"
-      }
-    ]
-  },
-  {
-    title: "體驗活動與服務",
-    items: [
-      {
-        id: "q07",
-        question: "07. 提供農業相關體驗活動",
-        hint: "評分參考：0分=無、2.5分=有基本體驗、5分=有豐富多元體驗"
-      },
-      {
-        id: "q08",
-        question: "08. 體驗活動安全性與導覽說明",
-        hint: "評分參考：0分=不足、2.5分=普通、5分=非常完善"
-      },
-      {
-        id: "q09",
-        question: "09. 服務人員態度與專業度",
-        hint: "評分參考：0分=不佳、2.5分=普通、5分=優良"
-      },
-      {
-        id: "q10",
-        question: "10. 場域特色商品開發",
-        hint: "評分參考：0分=無、2.5分=有一般商品、5分=有特色創意商品"
-      }
-    ]
-  },
-  {
-    title: "安全與環境保護",
-    items: [
-      {
-        id: "q11",
-        question: "11. 場域安全管理措施",
-        hint: "評分參考：0分=不足、2.5分=普通、5分=完善"
-      },
-      {
-        id: "q12",
-        question: "12. 環境保護與資源利用",
-        hint: "評分參考：0分=未實施、2.5分=有基本措施、5分=落實永續經營"
-      },
-      {
-        id: "q13",
-        question: "13. 垃圾分類與環境清潔",
-        hint: "評分參考：0分=不佳、2.5分=普通、5分=優良"
-      }
-    ]
-  }
-];
+interface AssessmentTemplate {
+  id: string;
+  section_id: string;
+  section_name: string;
+  question_id: string;
+  question_text: string;
+  evaluation_criteria: string;
+  order_index: number;
+  applicable_categories: string[] | null;
+}
 
-// 第五構面 (僅第一類、第二類適用)
-const fifthSection = {
-  title: "在地連結與創新 (第五構面)",
-  items: [
-    {
-      id: "q14",
-      question: "14. 與在地社區合作程度",
-      hint: "評分參考：0分=無、2.5分=有基本合作、5分=深度合作"
-    },
-    {
-      id: "q15",
-      question: "15. 運用在地食材與農產品",
-      hint: "評分參考：0分=無、2.5分=部分使用、5分=大量使用"
-    },
-    {
-      id: "q16",
-      question: "16. 場域創新與特色發展",
-      hint: "評分參考：0分=無特色、2.5分=有一定特色、5分=非常創新獨特"
-    },
-    {
-      id: "q17",
-      question: "17. 農業文化傳承與教育",
-      hint: "評分參考：0分=無、2.5分=有基本介紹、5分=深入教育傳承"
-    }
-  ]
-};
+interface Section {
+  title: string;
+  items: {
+    id: string;
+    question: string;
+    hint: string;
+  }[];
+}
 
-// Plus 認證題庫
+// Plus 認證題庫 (暫時保持靜態，後續可遷移至資料庫)
 const plusAssessmentSections: Record<string, { title: string, items: { id: string, question: string, hint: string }[] }> = {
   "Plus永續行為": {
     title: "Plus 永續行為認證",
@@ -154,17 +60,68 @@ const plusAssessmentSections: Record<string, { title: string, items: { id: strin
 };
 
 export function FormStep3({ formData, updateFormData, nextStep, prevStep, saveDraft }: FormStep3Props) {
-  // 動態生成題庫
+  const [loading, setLoading] = useState(true);
+  const [basicSections, setBasicSections] = useState<Section[]>([]);
+
+  // 從 Supabase 讀取基礎認證題目
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('assessment_templates')
+          .select('*')
+          .eq('is_active', true)
+          .order('section_id', { ascending: true })
+          .order('order_index', { ascending: true });
+
+        if (error) throw error;
+
+        if (data) {
+          // 資料轉換: Flat List -> Nested Sections
+          const sectionsMap = new Map<string, Section>();
+          
+          data.forEach((template: AssessmentTemplate) => {
+            // 檢查是否適用於當前申請類別 (如果題目有指定 applicable_categories)
+            if (template.applicable_categories && template.applicable_categories.length > 0) {
+              // 如果 formData.category 為空，或者不在適用列表內，則跳過
+              if (!formData.category || !template.applicable_categories.includes(formData.category)) {
+                return;
+              }
+            }
+
+            if (!sectionsMap.has(template.section_id)) {
+              sectionsMap.set(template.section_id, {
+                title: template.section_name,
+                items: []
+              });
+            }
+            
+            const section = sectionsMap.get(template.section_id)!;
+            section.items.push({
+              id: template.question_id,
+              question: template.question_text,
+              hint: template.evaluation_criteria || "無評分參考"
+            });
+          });
+
+          setBasicSections(Array.from(sectionsMap.values()));
+        }
+      } catch (error) {
+        console.error('Error fetching templates:', error);
+        toast.error("載入題庫失敗，請稍後再試");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTemplates();
+  }, [formData.category]); // 當類別改變時重新篩選
+
+  // 合併基礎題庫與 Plus 題庫
   const assessmentSections = useMemo(() => {
-    const sections = [...baseAssessmentSections];
+    const sections = [...basicSections];
 
-    // 判斷是否需要加入第五構面 (第一類或第二類)
-    // 這裡假設 formData.category 的字串包含 "第一類" 或 "第二類"
-    if (formData.category?.includes("第一類") || formData.category?.includes("第二類")) {
-      sections.push(fifthSection);
-    }
-
-    // 加入 Plus 認證題庫
+    // 加入 Plus 認證題庫 (目前仍為靜態)
     if (formData.plusCategories && formData.plusCategories.length > 0) {
       formData.plusCategories.forEach((category) => {
         if (plusAssessmentSections[category]) {
@@ -174,7 +131,7 @@ export function FormStep3({ formData, updateFormData, nextStep, prevStep, saveDr
     }
 
     return sections;
-  }, [formData.category, formData.plusCategories]);
+  }, [basicSections, formData.plusCategories]);
 
   const handleScoreChange = (questionId: string, score: string) => {
     // Validate score is between 0 and 5
@@ -271,9 +228,15 @@ export function FormStep3({ formData, updateFormData, nextStep, prevStep, saveDr
         </div>
       </CardHeader>
       <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="max-h-[60vh] overflow-y-auto p-1 pb-2 custom-scrollbar">
-            <Accordion type="multiple" className="space-y-4" defaultValue={["section-0"]}>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64 text-[#1C4A27]">
+            <Loader2 className="w-12 h-12 animate-spin mb-4" />
+            <p className="text-lg font-medium">正在載入評核項目...</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="max-h-[60vh] overflow-y-auto p-1 pb-2 custom-scrollbar">
+              <Accordion type="multiple" className="space-y-4" defaultValue={["section-0"]}>
               {assessmentSections.map((section, sectionIndex) => (
                 <AccordionItem 
                   key={sectionIndex} 
@@ -429,7 +392,8 @@ export function FormStep3({ formData, updateFormData, nextStep, prevStep, saveDr
               下一步：確認送出
             </Button>
           </div>
-        </form>
+          </form>
+        )}
       </CardContent>
     </Card>
   );
